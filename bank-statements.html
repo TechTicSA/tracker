@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>الكشوف البنكية - النظام المالي</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content">
+      <div id="viewerBanner" class="viewer-banner hidden">أنت في وضع المشاهدة فقط</div>
+      <header class="topbar">
+        <div class="flex items-center gap-md">
+          <button class="hamburger">☰</button>
+          <nav class="breadcrumb" id="breadcrumb"></nav>
+        </div>
+        <div class="user-menu">
+          <div class="user-avatar" id="userAvatar"></div>
+          <button class="btn btn-outline btn-sm" onclick="FMS.Auth.logout()">خروج</button>
+        </div>
+      </header>
+      <div class="page-content">
+        <div class="page-header flex justify-between items-center">
+          <div>
+            <h1 class="page-title">الكشوف البنكية</h1>
+            <p class="page-subtitle">متابعة الحركات والأرصدة للحسابات البنكية</p>
+          </div>
+          <div id="adminActions"></div>
+        </div>
+
+        <!-- Account Tabs -->
+        <div class="tabs" id="accountTabs"></div>
+
+        <!-- Account Content -->
+        <div id="accountContent"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Transaction Modal -->
+  <div class="modal-overlay" id="transactionModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">إضافة حركة جديدة</h3>
+        <button class="modal-close">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="transactionForm">
+          <input type="hidden" id="accountId">
+          <div class="form-group">
+            <label class="form-label">التاريخ</label>
+            <input type="date" class="form-input" id="transDate" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">الوصف</label>
+            <input type="text" class="form-input" id="transDesc" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">إيداع</label>
+            <input type="number" class="form-input" id="transDeposit" value="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">سحب</label>
+            <input type="number" class="form-input" id="transWithdraw" value="0">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="FMS.UI.closeModal('transactionModal')">إلغاء</button>
+        <button class="btn btn-primary" onclick="saveTransaction()">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!FMS.Auth.requireAuth()) { document.body.innerHTML = ''; }
+    else {
+      const user = FMS.Auth.getCurrentUser();
+      const isAdmin = user.role === 'admin';
+      if (!isAdmin) document.getElementById('viewerBanner').classList.remove('hidden');
+      
+      document.getElementById('sidebar').innerHTML = FMS.UI.renderSidebar('bank-statements');
+      FMS.UI.setBreadcrumb(['الرئيسية', 'الكشوف البنكية']);
+      document.getElementById('userAvatar').textContent = user.name.charAt(0);
+
+      if (isAdmin) {
+        document.getElementById('adminActions').innerHTML = `
+          <button class="btn btn-primary" onclick="openTransactionModal()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            حركة جديدة
+          </button>
+        `;
+      }
+
+      const data = FMSData.getData();
+      let currentAccountId = data.bankAccounts[0]?.id || null;
+
+      // Render tabs
+      function renderTabs() {
+        document.getElementById('accountTabs').innerHTML = data.bankAccounts.map((acc, idx) => `
+          <button class="tab-btn ${idx === 0 ? 'active' : ''}" data-id="${acc.id}">${acc.name}</button>
+        `).join('');
+
+        // Tab click handlers
+        document.querySelectorAll('#accountTabs .tab-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('#accountTabs .tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentAccountId = parseInt(btn.dataset.id);
+            renderAccountContent();
+          });
+        });
+
+        renderAccountContent();
+      }
+
+      // Render account content
+      function renderAccountContent() {
+        const account = data.bankAccounts.find(a => a.id === currentAccountId);
+        if (!account) return;
+
+        // Calculate running balance
+        let runningBalance = account.openingBalance;
+        const transactions = account.transactions.map(t => {
+          runningBalance += (t.deposit - t.withdraw);
+          return { ...t, runningBalance };
+        });
+
+        const finalBalance = transactions.length > 0 ? transactions[transactions.length - 1].runningBalance : account.openingBalance;
+        const totalDeposits = account.transactions.reduce((s, t) => s + t.deposit, 0);
+        const totalWithdraws = account.transactions.reduce((s, t) => s + t.withdraw, 0);
+
+        let html = `
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">${account.name}</h2>
+              <div class="text-xl font-bold tabular-nums ${finalBalance >= 0 ? 'text-success' : 'text-danger'}">
+                الرصيد النهائي: ${FMSData.formatCurrency(finalBalance)} ر.س
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="flex gap-lg mb-lg" style="justify-content: space-around;">
+                <div class="text-center">
+                  <div class="text-sm text-muted">الرصيد الافتتاحي</div>
+                  <div class="text-lg font-bold tabular-nums">${FMSData.formatCurrency(account.openingBalance)}</div>
+                </div>
+                <div class="text-center">
+                  <div class="text-sm text-muted">إجمالي الإيداعات</div>
+                  <div class="text-lg font-bold tabular-nums text-success">${FMSData.formatCurrency(totalDeposits)}</div>
+                </div>
+                <div class="text-center">
+                  <div class="text-sm text-muted">إجمالي السحوبات</div>
+                  <div class="text-lg font-bold tabular-nums text-danger">${FMSData.formatCurrency(totalWithdraws)}</div>
+                </div>
+              </div>
+        `;
+
+        if (account.transactions.length === 0) {
+          html += `<div class="text-center text-muted py-lg">لا توجد حركات لهذا الحساب</div>`;
+        } else {
+          html += `
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>التاريخ</th>
+                    <th>الوصف</th>
+                    <th>إيداع</th>
+                    <th>سحب</th>
+                    <th>الرصيد الجاري</th>
+                    ${isAdmin ? '<th>إجراءات</th>' : ''}
+                  </tr>
+                </thead>
+                <tbody>
+          `;
+
+          account.transactions.forEach((t, idx) => {
+            html += `
+              <tr>
+                <td class="tabular-nums">${t.date}</td>
+                <td>${t.description}</td>
+                <td class="tabular-nums ${t.deposit > 0 ? 'text-success' : ''}">${t.deposit > 0 ? FMSData.formatCurrency(t.deposit) : '-'}</td>
+                <td class="tabular-nums ${t.withdraw > 0 ? 'text-danger' : ''}">${t.withdraw > 0 ? FMSData.formatCurrency(t.withdraw) : '-'}</td>
+                <td class="tabular-nums font-bold">${FMSData.formatCurrency(transactions[idx].runningBalance)}</td>
+                ${isAdmin ? `
+                  <td>
+                    <button class="btn btn-icon btn-outline" onclick="deleteTransaction(${t.id})">🗑️</button>
+                  </td>
+                ` : ''}
+              </tr>
+            `;
+          });
+
+          html += `</tbody></table></div>`;
+        }
+
+        html += `</div></div>`;
+        document.getElementById('accountContent').innerHTML = html;
+      }
+
+      renderTabs();
+
+      window.openTransactionModal = () => {
+        document.getElementById('accountId').value = currentAccountId;
+        document.getElementById('transactionForm').reset();
+        document.getElementById('transDate').value = new Date().toISOString().split('T')[0];
+        FMS.UI.openModal('transactionModal');
+      };
+
+      window.saveTransaction = () => {
+        const accountId = parseInt(document.getElementById('accountId').value);
+        const newTrans = {
+          id: Date.now(),
+          date: document.getElementById('transDate').value,
+          description: document.getElementById('transDesc').value,
+          deposit: parseInt(document.getElementById('transDeposit').value) || 0,
+          withdraw: parseInt(document.getElementById('transWithdraw').value) || 0
+        };
+
+        const accounts = FMSData.getTable('bankAccounts');
+        const account = accounts.find(a => a.id === accountId);
+        if (account) {
+          account.transactions.push(newTrans);
+          FMSData.updateTable('bankAccounts', accounts);
+          FMS.UI.showToast('تمت الإضافة بنجاح', 'success');
+          FMS.UI.closeModal('transactionModal');
+          renderAccountContent();
+        }
+      };
+
+      window.deleteTransaction = (transId) => {
+        if (confirm('هل أنت متأكد من حذف هذه الحركة؟')) {
+          const accounts = FMSData.getTable('bankAccounts');
+          const account = accounts.find(a => a.id === currentAccountId);
+          if (account) {
+            account.transactions = account.transactions.filter(t => t.id !== transId);
+            FMSData.updateTable('bankAccounts', accounts);
+            FMS.UI.showToast('تم الحذف بنجاح', 'success');
+            renderAccountContent();
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

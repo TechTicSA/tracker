@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>استثمار العيادة - النظام المالي</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content">
+      <div id="viewerBanner" class="viewer-banner hidden">أنت في وضع المشاهدة فقط</div>
+      <header class="topbar">
+        <div class="flex items-center gap-md">
+          <button class="hamburger">☰</button>
+          <nav class="breadcrumb" id="breadcrumb"></nav>
+        </div>
+        <div class="user-menu">
+          <div class="user-avatar" id="userAvatar"></div>
+          <button class="btn btn-outline btn-sm" onclick="FMS.Auth.logout()">خروج</button>
+        </div>
+      </header>
+      <div class="page-content">
+        <div class="page-header">
+          <h1 class="page-title">استثمار العيادة</h1>
+          <p class="page-subtitle">متابعة استرداد رأس المال والأرباح المستهدفة</p>
+        </div>
+
+        <!-- Goal Cards -->
+        <div class="kpi-grid" id="goalCards"></div>
+
+        <!-- Chart -->
+        <div class="card mt-lg">
+          <div class="card-header"><h2 class="card-title">الأداء الشهري</h2></div>
+          <div class="card-body"><div class="chart-container" id="clinicChart"></div></div>
+        </div>
+
+        <!-- Monthly Table -->
+        <div class="card mt-lg">
+          <div class="card-header"><h2 class="card-title">جدول الاسترداد الشهري</h2></div>
+          <div class="card-body" id="monthlyTable"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!FMS.Auth.requireAuth()) { document.body.innerHTML = ''; }
+    else {
+      const user = FMS.Auth.getCurrentUser();
+      if (user.role !== 'admin') document.getElementById('viewerBanner').classList.remove('hidden');
+      
+      document.getElementById('sidebar').innerHTML = FMS.UI.renderSidebar('clinic-investment');
+      FMS.UI.setBreadcrumb(['الرئيسية', 'استثمار العيادة']);
+      document.getElementById('userAvatar').textContent = user.name.charAt(0);
+
+      const data = FMSData.getData();
+      const clinic = data.clinicInvestment;
+
+      // Calculate totals
+      const totalCollected = clinic.monthlyData.reduce((s, m) => s + m.collected, 0);
+      const totalCapitalReturn = clinic.monthlyData.reduce((s, m) => s + m.capitalReturn, 0);
+      const totalProfit = clinic.monthlyData.reduce((s, m) => s + m.profit, 0);
+
+      const capitalProgress = (totalCapitalReturn / clinic.capitalRecovery) * 100;
+      const profitProgress = (totalProfit / clinic.profitTarget) * 100;
+      const goalProgress = (totalCollected / clinic.totalGoal) * 100;
+
+      // Goal Cards
+      document.getElementById('goalCards').innerHTML = `
+        <div class="kpi-card info">
+          <div class="kpi-label">إجمالي الهدف</div>
+          <div class="kpi-value tabular-nums">${FMSData.formatCurrency(clinic.totalGoal)}</div>
+          <div class="progress-track mt-sm">
+            <div class="progress-fill info" style="width: ${goalProgress}%"></div>
+          </div>
+          <div class="text-sm text-muted mt-sm">${FMSData.formatPercentage(goalProgress)} منجز</div>
+        </div>
+        <div class="kpi-card success">
+          <div class="kpi-label">استرداد رأس المال</div>
+          <div class="kpi-value tabular-nums">${FMSData.formatCurrency(totalCapitalReturn)}</div>
+          <div class="text-sm text-muted">من ${FMSData.formatCurrency(clinic.capitalRecovery)}</div>
+          <div class="progress-track mt-sm">
+            <div class="progress-fill success" style="width: ${capitalProgress}%"></div>
+          </div>
+          <div class="text-sm text-muted mt-sm">${FMSData.formatPercentage(capitalProgress)} منجز</div>
+        </div>
+        <div class="kpi-card warning">
+          <div class="kpi-label">الربح المستهدف</div>
+          <div class="kpi-value tabular-nums">${FMSData.formatCurrency(totalProfit)}</div>
+          <div class="text-sm text-muted">من ${FMSData.formatCurrency(clinic.profitTarget)}</div>
+          <div class="progress-track mt-sm">
+            <div class="progress-fill warning" style="width: ${profitProgress}%"></div>
+          </div>
+          <div class="text-sm text-muted mt-sm">${FMSData.formatPercentage(profitProgress)} منجز</div>
+        </div>
+      `;
+
+      // Chart - Grouped bars
+      const months = clinic.monthlyData.slice(0, 7).map(m => m.month);
+      const collectedVals = clinic.monthlyData.slice(0, 7).map(m => m.collected);
+      
+      document.getElementById('clinicChart').innerHTML = FMS.Charts.renderBarChart(
+        months, 
+        collectedVals, 
+        ['#40c057', '#339af0', '#fab005'], 
+        250
+      );
+
+      // Monthly Table
+      let tableHTML = `
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>الشهر</th>
+                <th>التاريخ</th>
+                <th>المحصل</th>
+                <th>عائد رأس المال</th>
+                <th>الربح</th>
+                <th>الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      clinic.monthlyData.forEach((m, idx) => {
+        const statusBadge = m.status === 'actual' 
+          ? '<span class="badge badge-success">● فعلي</span>' 
+          : '<span class="badge badge-gray">تقديري</span>';
+        
+        tableHTML += `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${m.month}</td>
+            <td class="tabular-nums">${m.date}</td>
+            <td class="tabular-nums font-bold">${FMSData.formatCurrency(m.collected)}</td>
+            <td class="tabular-nums text-success">${FMSData.formatCurrency(m.capitalReturn)}</td>
+            <td class="tabular-nums text-warning">${FMSData.formatCurrency(m.profit)}</td>
+            <td>${statusBadge}</td>
+          </tr>
+        `;
+      });
+
+      // Totals row
+      tableHTML += `
+        <tr style="background:var(--color-surface-alt);font-weight:bold">
+          <td>-</td>
+          <td>الإجمالي</td>
+          <td>-</td>
+          <td class="tabular-nums">${FMSData.formatCurrency(totalCollected)}</td>
+          <td class="tabular-nums text-success">${FMSData.formatCurrency(totalCapitalReturn)}</td>
+          <td class="tabular-nums text-warning">${FMSData.formatCurrency(totalProfit)}</td>
+          <td>-</td>
+        </tr>
+      `;
+
+      // Remaining row
+      const remainingCapital = clinic.capitalRecovery - totalCapitalReturn;
+      const remainingProfit = clinic.profitTarget - totalProfit;
+      const remainingTotal = clinic.totalGoal - totalCollected;
+
+      tableHTML += `
+        <tr style="background:var(--color-warning);color:#000;">
+          <td>-</td>
+          <td>المتبقي</td>
+          <td>-</td>
+          <td class="tabular-nums">${FMSData.formatCurrency(remainingTotal)}</td>
+          <td class="tabular-nums">${FMSData.formatCurrency(remainingCapital)}</td>
+          <td class="tabular-nums">${FMSData.formatCurrency(remainingProfit)}</td>
+          <td>-</td>
+        </tr>
+      `;
+
+      tableHTML += `</tbody></table></div>`;
+      document.getElementById('monthlyTable').innerHTML = tableHTML;
+    }
+  </script>
+</body>
+</html>

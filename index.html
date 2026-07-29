@@ -1,1 +1,115 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تسجيل الدخول - النظام المالي</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    body { margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-card">
+      <div class="login-logo">م</div>
+      <h1 class="login-title">النظام المالي</h1>
+      <p class="login-subtitle">Family Office Financial Management</p>
+      
+      <div class="demo-credentials">
+        <h4>بيانات الدخول التجريبية:</h4>
+        <div class="demo-item">
+          <span>مدير النظام:</span>
+          <span class="tabular-nums">admin / admin</span>
+        </div>
+        <div class="demo-item">
+          <span>مستخدم عرض 1:</span>
+          <span class="tabular-nums">viewer1 / viewer1</span>
+        </div>
+        <div class="demo-item">
+          <span>مستخدم عرض 2:</span>
+          <span class="tabular-nums">viewer2 / viewer2</span>
+        </div>
+      </div>
 
+      <form id="loginForm">
+        <div class="error-message" id="errorMessage"></div>
+        
+        <div class="form-group">
+          <label class="form-label" for="username">اسم المستخدم</label>
+          <input 
+            type="text" 
+            id="username" 
+            name="username" 
+            class="form-input" 
+            placeholder="أدخل اسم المستخدم"
+            required
+            autocomplete="username"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">كلمة المرور</label>
+          <input 
+            type="password" 
+            id="password" 
+            name="password" 
+            class="form-input" 
+            placeholder="أدخل كلمة المرور"
+            required
+            autocomplete="current-password"
+          >
+        </div>
+
+        <button type="submit" class="btn btn-primary w-full">
+          تسجيل الدخول
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // Check if already logged in
+    if (FMS.Auth.isAuthenticated()) {
+      window.location.href = 'dashboard.html';
+    }
+
+    // Handle login form submission
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const errorEl = document.getElementById('errorMessage');
+
+      const result = FMS.Auth.login(username, password);
+      
+      if (result.success) {
+        // Redirect based on role
+        window.location.href = 'dashboard.html';
+      } else {
+        errorEl.textContent = result.error;
+        errorEl.classList.add('visible');
+        
+        // Shake animation
+        const card = document.querySelector('.login-card');
+        card.style.animation = 'shake 0.5s';
+        setTimeout(() => card.style.animation = '', 500);
+      }
+    });
+
+    // Add shake animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        75% { transform: translateX(10px); }
+      }
+    `;
+    document.head.appendChild(style);
+  </script>
+</body>
+</html>

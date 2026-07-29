@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مركز التقارير - النظام المالي</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content">
+      <div id="viewerBanner" class="viewer-banner hidden">أنت في وضع المشاهدة فقط</div>
+      <header class="topbar">
+        <div class="flex items-center gap-md">
+          <button class="hamburger">☰</button>
+          <nav class="breadcrumb" id="breadcrumb"></nav>
+        </div>
+        <div class="user-menu">
+          <div class="user-avatar" id="userAvatar"></div>
+          <button class="btn btn-outline btn-sm" onclick="FMS.Auth.logout()">خروج</button>
+        </div>
+      </header>
+      <div class="page-content">
+        <div class="page-header flex justify-between items-center">
+          <div>
+            <h1 class="page-title">مركز التقارير</h1>
+            <p class="page-subtitle">إنشاء وتصدير التقارير المالية</p>
+          </div>
+          <div class="flex gap-sm">
+            <input type="date" class="form-input" id="startDate">
+            <span>-</span>
+            <input type="date" class="form-input" id="endDate">
+          </div>
+        </div>
+
+        <!-- Reports Grid -->
+        <div class="reports-grid" id="reportsGrid"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Report Preview Modal -->
+  <div class="modal-overlay" id="previewModal">
+    <div class="modal" style="max-width: 800px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="previewTitle">معاينة التقرير</h3>
+        <button class="modal-close">×</button>
+      </div>
+      <div class="modal-body" id="previewContent"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="exportReport('pdf')">PDF 📄</button>
+        <button class="btn btn-outline" onclick="exportReport('excel')">Excel 📊</button>
+        <button class="btn btn-outline" onclick="exportReport('csv')">CSV 📋</button>
+        <button class="btn btn-primary" onclick="FMS.UI.closeModal('previewModal')">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!FMS.Auth.requireAuth()) { document.body.innerHTML = ''; }
+    else {
+      const user = FMS.Auth.getCurrentUser();
+      if (user.role !== 'admin') document.getElementById('viewerBanner').classList.remove('hidden');
+      
+      document.getElementById('sidebar').innerHTML = FMS.UI.renderSidebar('reports');
+      FMS.UI.setBreadcrumb(['الرئيسية', 'مركز التقارير']);
+      document.getElementById('userAvatar').textContent = user.name.charAt(0);
+
+      // Set default date range
+      document.getElementById('startDate').value = '2026-01-01';
+      document.getElementById('endDate').value = '2026-12-31';
+
+      const data = FMSData.getData();
+
+      // Report cards with icons
+      const reportCards = [
+        { id: 1, icon: 'chartPie', title: 'ملخص الميزانية السنوية', desc: 'عرض شامل للإيرادات والمصروفات المتوقعة والفعلية' },
+        { id: 2, icon: 'documentText', title: 'قائمة الأرباح والخسائر', desc: 'تحليل شهري للأداء المالي وصافي التدفق' },
+        { id: 3, icon: 'cash', title: 'تقرير التدفق النقدي', desc: 'متابعة حركة الدخول والخروج للحسابات' },
+        { id: 4, icon: 'trendingUp', title: 'أداء الاستثمارات', desc: 'تقييم عوائد العيادة والاستثمارات الأخرى' },
+        { id: 5, icon: 'clipboardList', title: 'جدول القروض', desc: 'متابعة أقساط القروض والمدفوعات المتبقية' },
+        { id: 6, icon: 'bank', title: 'تسوية الحسابات البنكية', desc: 'مطابقة الأرصدة والحركات المصرفية' }
+      ];
+
+      document.getElementById('reportsGrid').innerHTML = reportCards.map(report => `
+        <div class="report-card">
+          <div class="report-icon">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+              ${FMS.Icons[report.icon]}
+            </svg>
+          </div>
+          <h3 class="report-title">${report.title}</h3>
+          <p class="report-desc">${report.desc}</p>
+          <button class="btn btn-primary w-full" onclick="generateReport(${report.id}, '${report.title}')">
+            إنشاء التقرير
+          </button>
+        </div>
+      `).join('');
+
+      window.generateReport = (id, title) => {
+        let content = '';
+        
+        switch(id) {
+          case 1: // Budget Summary
+            const revTotal = data.budgetRevenue.reduce((s,i) => s + i.actual, 0);
+            const expTotal = [...data.budgetOperating, ...data.budgetOther].reduce((s,i) => s + i.actual, 0);
+            content = `
+              <h4 class="mb-lg">ملخص الميزانية السنوية 2026</h4>
+              <div class="kpi-grid">
+                <div class="kpi-card success"><div class="kpi-label">الإيرادات الفعلية</div><div class="kpi-value tabular-nums">${FMSData.formatCurrency(revTotal)}</div></div>
+                <div class="kpi-card danger"><div class="kpi-label">المصروفات الفعلية</div><div class="kpi-value tabular-nums">${FMSData.formatCurrency(expTotal)}</div></div>
+                <div class="kpi-card info"><div class="kpi-label">صافي المركز</div><div class="kpi-value tabular-nums">${FMSData.formatCurrency(revTotal - expTotal)}</div></div>
+              </div>
+              <div class="mt-lg"><strong>الإيرادات حسب المصدر:</strong></div>
+              <ul class="mt-sm">${data.budgetRevenue.map(i => `<li>${i.item}: ${FMSData.formatCurrency(i.actual)}</li>`).join('')}</ul>
+            `;
+            break;
+          case 2: // P&L
+            content = `<h4 class="mb-lg">قائمة الأرباح والخسائر</h4><p>يتم إنشاء هذا التقرير بناءً على الفترة المحددة.</p>`;
+            break;
+          case 3: // Cash Flow
+            content = `<h4 class="mb-lg">تقرير التدفق النقدي</h4><p>يوضح حركات الدخول والخروج النقدية للحسابات.</p>`;
+            break;
+          case 4: // Investment
+            const clinic = data.clinicInvestment;
+            const totalCollected = clinic.monthlyData.reduce((s,m) => s + m.collected, 0);
+            content = `
+              <h4 class="mb-lg">أداء الاستثمارات</h4>
+              <div class="kpi-grid">
+                <div class="kpi-card info"><div class="kpi-label">الهدف الكلي</div><div class="kpi-value tabular-nums">${FMSData.formatCurrency(clinic.totalGoal)}</div></div>
+                <div class="kpi-card success"><div class="kpi-label">المحقق</div><div class="kpi-value tabular-nums">${FMSData.formatCurrency(totalCollected)}</div></div>
+              </div>
+            `;
+            break;
+          case 5: // Loans
+            const totalFinancing = data.loans.reduce((s,l) => s + l.totalFinancing, 0);
+            const totalPaid = data.loans.reduce((s,l) => s + l.installments.filter(i => i.status === 'paid').reduce((ss,i) => ss + i.amount, 0), 0);
+            content = `
+              <h4 class="mb-lg">جدول القروض</h4>
+              <div class="summary-bar">
+                <div class="summary-item"><div class="summary-label">إجمالي التمويل</div><div class="summary-value">${FMSData.formatCurrency(totalFinancing)}</div></div>
+                <div class="summary-item"><div class="summary-label">المدفوع</div><div class="summary-value text-success">${FMSData.formatCurrency(totalPaid)}</div></div>
+              </div>
+            `;
+            break;
+          case 6: // Reconciliation
+            content = `<h4 class="mb-lg">تسوية الحسابات البنكية</h4><p>مطابقة أرصدة الحسابات مع الكشوف البنكية.</p>`;
+            break;
+        }
+
+        document.getElementById('previewTitle').textContent = title;
+        document.getElementById('previewContent').innerHTML = content;
+        FMS.UI.openModal('previewModal');
+      };
+
+      window.exportReport = (format) => {
+        FMS.UI.showToast(`جاري تصدير التقرير بصيغة ${format.toUpperCase()}...`, 'info');
+        setTimeout(() => {
+          FMS.UI.showToast('تم التصدير بنجاح! (محاكاة)', 'success');
+        }, 1500);
+      };
+    }
+  </script>
+</body>
+</html>
