@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إدارة المستخدمين - النظام المالي</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content">
+      <header class="topbar">
+        <div class="flex items-center gap-md">
+          <button class="hamburger">☰</button>
+          <nav class="breadcrumb" id="breadcrumb"></nav>
+        </div>
+        <div class="user-menu">
+          <div class="user-avatar" id="userAvatar"></div>
+          <button class="btn btn-outline btn-sm" onclick="FMS.Auth.logout()">خروج</button>
+        </div>
+      </header>
+      <div class="page-content">
+        <div class="page-header flex justify-between items-center">
+          <div>
+            <h1 class="page-title">إدارة المستخدمين</h1>
+            <p class="page-subtitle">إضافة وتعديل وحذف مستخدمي النظام</p>
+          </div>
+          <button class="btn btn-primary" onclick="openUserModal()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            إضافة مستخدم
+          </button>
+        </div>
+
+        <!-- Users Table -->
+        <div class="card">
+          <div class="card-body" id="usersTable"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add/Edit User Modal -->
+  <div class="modal-overlay" id="userModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="userModalTitle">إضافة مستخدم</h3>
+        <button class="modal-close">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="userForm">
+          <input type="hidden" id="editUserId">
+          <div class="form-group">
+            <label class="form-label">الاسم</label>
+            <input type="text" class="form-input" id="userName" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">اسم المستخدم</label>
+            <input type="text" class="form-input" id="userUsername" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">كلمة المرور</label>
+            <input type="password" class="form-input" id="userPassword" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">الدور</label>
+            <select class="form-input form-select" id="userRole" onchange="togglePagePermissions()">
+              <option value="admin">مدير (Admin)</option>
+              <option value="viewer">مشاهد (Viewer)</option>
+            </select>
+          </div>
+          <div class="form-group" id="pagePermissions">
+            <label class="form-label">الصفحات المسموحة</label>
+            <div class="checkbox-group">
+              <label class="checkbox-item"><input type="checkbox" name="pages" value="dashboard"> لوحة التحكم</label>
+              <label class="checkbox-item"><input type="checkbox" name="pages" value="annual-budget"> الميزانية السنوية</label>
+              <label class="checkbox-item"><input type="checkbox" name="pages" value="monthly-report"> التقرير الشهري</label>
+              <label class="checkbox-item"><input type="checkbox" name="pages" value="expense-tracking"> متابعة المصروفات</label>
+              <label class="checkbox-item"><input type="checkbox" name="pages" value="bank-statements"> الكشوف البنكية</label>
+              <label class="checkbox-item"><input type="checkbox" name="pages" value="account-balances"> أرصدة الحسابات</label>
+              <label class="checkbox-item"><input type="checkbox" name="pages" value="clinic-investment"> استثمار العيادة</label>
+              <label class="checkbox-item"><input type="checkbox" name="pages" value="loans"> القروض</label>
+              <label class="checkbox-item"><input type="checkbox" name="pages" value="reports"> التقارير</label>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="FMS.UI.closeModal('userModal')">إلغاء</button>
+        <button class="btn btn-primary" onclick="saveUser()">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="deleteModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">تأكيد الحذف</h3>
+        <button class="modal-close">×</button>
+      </div>
+      <div class="modal-body">
+        <p>هل أنت متأكد من حذف هذا المستخدم؟ لا يمكن التراجع عن هذا الإجراء.</p>
+        <input type="hidden" id="deleteUserId">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="FMS.UI.closeModal('deleteModal')">إلغاء</button>
+        <button class="btn btn-danger" onclick="confirmDelete()">حذف</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // Admin check - redirect if not admin
+    if (!FMS.Auth.isAuthenticated()) {
+      window.location.href = 'index.html';
+    } else if (!FMS.Auth.isAdmin()) {
+      window.location.href = 'dashboard.html';
+    } else {
+      const user = FMS.Auth.getCurrentUser();
+      
+      document.getElementById('sidebar').innerHTML = FMS.UI.renderSidebar('users');
+      FMS.UI.setBreadcrumb(['الرئيسية', 'إدارة المستخدمين']);
+      document.getElementById('userAvatar').textContent = user.name.charAt(0);
+
+      function renderUsersTable() {
+        const users = FMSData.getTable('users');
+        
+        let html = `
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>الاسم</th>
+                  <th>اسم المستخدم</th>
+                  <th>الدور</th>
+                  <th>الصفحات المسموحة</th>
+                  <th>تاريخ الإنشاء</th>
+                  <th>إجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+
+        users.forEach(u => {
+          const roleBadge = u.role === 'admin' ? 'badge-info' : 'badge-gray';
+          const pageCount = u.role === 'admin' ? 'الكل' : (u.allowedPages?.length || 0);
+          const canDelete = u.id !== 1; // Cannot delete main admin
+
+          html += `
+            <tr>
+              <td>${u.name}</td>
+              <td>${u.username}</td>
+              <td><span class="badge ${roleBadge}">${u.role === 'admin' ? 'مدير' : 'مشاهد'}</span></td>
+              <td>${pageCount}</td>
+              <td class="tabular-nums">${u.createdAt}</td>
+              <td>
+                <button class="btn btn-icon btn-outline" onclick="openUserModal(${u.id})" title="تعديل">✏️</button>
+                ${canDelete ? `<button class="btn btn-icon btn-outline" onclick="openDeleteModal(${u.id})" title="حذف">🗑️</button>` : ''}
+              </td>
+            </tr>
+          `;
+        });
+
+        html += `</tbody></table></div>`;
+        document.getElementById('usersTable').innerHTML = html;
+      }
+
+      renderUsersTable();
+
+      window.togglePagePermissions = () => {
+        const role = document.getElementById('userRole').value;
+        const permDiv = document.getElementById('pagePermissions');
+        permDiv.style.display = role === 'admin' ? 'none' : 'block';
+      };
+
+      window.openUserModal = (userId = null) => {
+        document.getElementById('userModalTitle').textContent = userId ? 'تعديل مستخدم' : 'إضافة مستخدم';
+        document.getElementById('editUserId').value = userId || '';
+        document.getElementById('userForm').reset();
+
+        if (userId) {
+          const users = FMSData.getTable('users');
+          const u = users.find(x => x.id === userId);
+          if (u) {
+            document.getElementById('userName').value = u.name;
+            document.getElementById('userUsername').value = u.username;
+            document.getElementById('userPassword').value = u.password;
+            document.getElementById('userRole').value = u.role;
+            
+            if (u.role === 'viewer' && u.allowedPages) {
+              document.querySelectorAll('input[name="pages"]').forEach(cb => {
+                cb.checked = u.allowedPages.includes(cb.value);
+              });
+            }
+          }
+        }
+
+        togglePagePermissions();
+        FMS.UI.openModal('userModal');
+      };
+
+      window.saveUser = () => {
+        const id = document.getElementById('editUserId').value;
+        const role = document.getElementById('userRole').value;
+        
+        let allowedPages = role === 'admin' ? ['all'] : [];
+        if (role === 'viewer') {
+          document.querySelectorAll('input[name="pages"]:checked').forEach(cb => {
+            allowedPages.push(cb.value);
+          });
+        }
+
+        const userData = {
+          name: document.getElementById('userName').value,
+          username: document.getElementById('userUsername').value,
+          password: document.getElementById('userPassword').value,
+          role: role,
+          allowedPages: allowedPages
+        };
+
+        if (id) {
+          FMSData.updateItem('users', parseInt(id), userData);
+          FMS.UI.showToast('تم تعديل المستخدم بنجاح', 'success');
+        } else {
+          FMSData.addItem('users', userData);
+          FMS.UI.showToast('تمت إضافة المستخدم بنجاح', 'success');
+        }
+
+        FMS.UI.closeModal('userModal');
+        renderUsersTable();
+      };
+
+      window.openDeleteModal = (userId) => {
+        document.getElementById('deleteUserId').value = userId;
+        FMS.UI.openModal('deleteModal');
+      };
+
+      window.confirmDelete = () => {
+        const userId = parseInt(document.getElementById('deleteUserId').value);
+        if (userId === 1) {
+          FMS.UI.showToast('لا يمكن حذف حساب المدير الرئيسي', 'error');
+          return;
+        }
+        
+        FMSData.deleteItem('users', userId);
+        FMS.UI.showToast('تم حذف المستخدم بنجاح', 'success');
+        FMS.UI.closeModal('deleteModal');
+        renderUsersTable();
+      };
+    }
+  </script>
+</body>
+</html>

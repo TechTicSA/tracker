@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>التقرير الشهري - النظام المالي</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content">
+      <div id="viewerBanner" class="viewer-banner hidden">أنت في وضع المشاهدة فقط</div>
+      <header class="topbar">
+        <div class="flex items-center gap-md">
+          <button class="hamburger">☰</button>
+          <nav class="breadcrumb" id="breadcrumb"></nav>
+        </div>
+        <div class="user-menu">
+          <div class="user-avatar" id="userAvatar"></div>
+          <button class="btn btn-outline btn-sm" onclick="FMS.Auth.logout()">خروج</button>
+        </div>
+      </header>
+      <div class="page-content">
+        <div class="page-header">
+          <h1 class="page-title">التقرير الشهري</h1>
+          <p class="page-subtitle">تحليل الأداء المالي لشهور يناير - يوليو 2026</p>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="kpi-grid" id="summaryCards"></div>
+
+        <!-- Revenue Matrix -->
+        <div class="card mt-lg">
+          <div class="card-header"><h2 class="card-title">الإيرادات الشهرية</h2></div>
+          <div class="card-body" id="revenueMatrix"></div>
+        </div>
+
+        <!-- Expense Matrix -->
+        <div class="card mt-lg">
+          <div class="card-header"><h2 class="card-title">المصروفات الشهرية</h2></div>
+          <div class="card-body" id="expenseMatrix"></div>
+        </div>
+
+        <!-- Net Flow Chart -->
+        <div class="card mt-lg">
+          <div class="card-header"><h2 class="card-title">صافي التدفق النقدي</h2></div>
+          <div class="card-body">
+            <div class="chart-container" id="netFlowChart"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!FMS.Auth.requireAuth()) { document.body.innerHTML = ''; }
+    else {
+      const user = FMS.Auth.getCurrentUser();
+      if (user.role !== 'admin') document.getElementById('viewerBanner').classList.remove('hidden');
+      document.getElementById('sidebar').innerHTML = FMS.UI.renderSidebar('monthly-report');
+      FMS.UI.setBreadcrumb(['الرئيسية', 'التقرير الشهري']);
+      document.getElementById('userAvatar').textContent = user.name.charAt(0);
+
+      const data = FMSData.getData();
+      const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul'];
+      const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو'];
+
+      // Calculate totals
+      const totalRevenue = data.monthlyRevenue.reduce((sum, item) => 
+        sum + months.reduce((mSum, m) => mSum + item[m], 0), 0);
+      const totalExpenses = data.monthlyExpenses.reduce((sum, item) => 
+        sum + months.reduce((mSum, m) => mSum + item[m], 0), 0);
+      const netFlow = totalRevenue - totalExpenses;
+      
+      // Cumulative balance
+      let cumulative = 0;
+      const cumulativeBalances = months.map(m => {
+        const rev = data.monthlyRevenue.reduce((s, i) => s + i[m], 0);
+        const exp = data.monthlyExpenses.reduce((s, i) => s + i[m], 0);
+        cumulative += (rev - exp);
+        return cumulative;
+      });
+
+      document.getElementById('summaryCards').innerHTML = `
+        <div class="kpi-card success"><div class="kpi-label">إجمالي الإيرادات (7 أشهر)</div><div class="kpi-value tabular-nums">${FMSData.formatCurrency(totalRevenue)}</div></div>
+        <div class="kpi-card danger"><div class="kpi-label">إجمالي المصروفات (7 أشهر)</div><div class="kpi-value tabular-nums">${FMSData.formatCurrency(totalExpenses)}</div></div>
+        <div class="kpi-card info"><div class="kpi-label">صافي التدفق</div><div class="kpi-value tabular-nums ${netFlow >= 0 ? 'text-success' : 'text-danger'}">${FMSData.formatCurrency(Math.abs(netFlow))}</div></div>
+        <div class="kpi-card warning"><div class="kpi-label">الرصيد التراكمي</div><div class="kpi-value tabular-nums">${FMSData.formatCurrency(cumulativeBalances[cumulativeBalances.length - 1])}</div></div>
+      `;
+
+      // Revenue Matrix Table
+      let revHTML = `<div class="table-container"><table class="data-table"><thead><tr><th>البند</th>${monthNames.map(m => `<th>${m}</th>`).join('')}<th>الإجمالي السنوي</th></tr></thead><tbody>`;
+      data.monthlyRevenue.forEach(item => {
+        const yearly = months.reduce((s, m) => s + item[m], 0);
+        revHTML += `<tr><td>${item.item}</td>${months.map(m => `<td class="tabular-nums">${FMSData.formatCurrency(item[m])}</td>`).join('')}<td class="tabular-nums font-bold">${FMSData.formatCurrency(yearly)}</td></tr>`;
+      });
+      const revYearlyTotal = data.monthlyRevenue.reduce((s, i) => s + months.reduce((ss, m) => ss + i[m], 0), 0);
+      revHTML += `<tr style="background:var(--color-surface-alt);font-weight:bold"><td>الإجمالي</td>${months.map(m => `<td class="tabular-nums">${FMSData.formatCurrency(data.monthlyRevenue.reduce((s,i)=>s+i[m],0))}</td>`).join('')}<td class="tabular-nums">${FMSData.formatCurrency(revYearlyTotal)}</td></tr></tbody></table></div>`;
+      document.getElementById('revenueMatrix').innerHTML = revHTML;
+
+      // Expense Matrix Table
+      let expHTML = `<div class="table-container"><table class="data-table"><thead><tr><th>البند</th>${monthNames.map(m => `<th>${m}</th>`).join('')}<th>الإجمالي السنوي</th></tr></thead><tbody>`;
+      data.monthlyExpenses.forEach(item => {
+        const yearly = months.reduce((s, m) => s + item[m], 0);
+        expHTML += `<tr><td>${item.item}</td>${months.map(m => `<td class="tabular-nums">${FMSData.formatCurrency(item[m])}</td>`).join('')}<td class="tabular-nums font-bold">${FMSData.formatCurrency(yearly)}</td></tr>`;
+      });
+      const expYearlyTotal = data.monthlyExpenses.reduce((s, i) => s + months.reduce((ss, m) => ss + i[m], 0), 0);
+      expHTML += `<tr style="background:var(--color-surface-alt);font-weight:bold"><td>الإجمالي</td>${months.map(m => `<td class="tabular-nums">${FMSData.formatCurrency(data.monthlyExpenses.reduce((s,i)=>s+i[m],0))}</td>`).join('')}<td class="tabular-nums">${FMSData.formatCurrency(expYearlyTotal)}</td></tr></tbody></table></div>`;
+      document.getElementById('expenseMatrix').innerHTML = expHTML;
+
+      // Net Flow Chart
+      const netValues = months.map(m => {
+        const rev = data.monthlyRevenue.reduce((s, i) => s + i[m], 0);
+        const exp = data.monthlyExpenses.reduce((s, i) => s + i[m], 0);
+        return rev - exp;
+      });
+      document.getElementById('netFlowChart').innerHTML = FMS.Charts.renderBarChart(monthNames, netValues, ['#40c057'], 250);
+    }
+  </script>
+</body>
+</html>

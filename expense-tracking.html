@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>متابعة المصروفات - النظام المالي</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content">
+      <div id="viewerBanner" class="viewer-banner hidden">أنت في وضع المشاهدة فقط</div>
+      <header class="topbar">
+        <div class="flex items-center gap-md">
+          <button class="hamburger">☰</button>
+          <nav class="breadcrumb" id="breadcrumb"></nav>
+        </div>
+        <div class="user-menu">
+          <div class="user-avatar" id="userAvatar"></div>
+          <button class="btn btn-outline btn-sm" onclick="FMS.Auth.logout()">خروج</button>
+        </div>
+      </header>
+      <div class="page-content">
+        <div class="page-header flex justify-between items-center">
+          <div>
+            <h1 class="page-title">متابعة المصروفات</h1>
+            <p class="page-subtitle">مقارنة المخطط بالفعلي لشهر يوليو 2026</p>
+          </div>
+          <div id="adminActions"></div>
+        </div>
+
+        <!-- Header Summary -->
+        <div class="kpi-grid" id="headerSummary"></div>
+
+        <!-- Expense Table -->
+        <div class="card mt-lg">
+          <div class="card-body" id="expenseTable"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div class="modal-overlay" id="expenseModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalTitle">إضافة مصروف</h3>
+        <button class="modal-close">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="expenseForm">
+          <input type="hidden" id="editId">
+          <div class="form-group">
+            <label class="form-label">اسم البند</label>
+            <input type="text" class="form-input" id="itemName" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">الحساب</label>
+            <select class="form-input form-select" id="itemAccount">
+              <option value="يومي">يومي</option>
+              <option value="راتب">راتب</option>
+              <option value="توفير">توفير</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">المخطط</label>
+            <input type="number" class="form-input" id="itemPlanned" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">الفعلي</label>
+            <input type="number" class="form-input" id="itemActual" required>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="FMS.UI.closeModal('expenseModal')">إلغاء</button>
+        <button class="btn btn-primary" onclick="saveExpense()">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!FMS.Auth.requireAuth()) { document.body.innerHTML = ''; }
+    else {
+      const user = FMS.Auth.getCurrentUser();
+      const isAdmin = user.role === 'admin';
+      if (!isAdmin) document.getElementById('viewerBanner').classList.remove('hidden');
+      
+      document.getElementById('sidebar').innerHTML = FMS.UI.renderSidebar('expense-tracking');
+      FMS.UI.setBreadcrumb(['الرئيسية', 'متابعة المصروفات']);
+      document.getElementById('userAvatar').textContent = user.name.charAt(0);
+
+      if (isAdmin) {
+        document.getElementById('adminActions').innerHTML = `
+          <button class="btn btn-primary" onclick="openExpenseModal()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            إضافة بند
+          </button>
+        `;
+      }
+
+      const data = FMSData.getData();
+      
+      // Calculate summary
+      const plannedTotal = data.expenseTracking.reduce((s, i) => s + i.planned, 0);
+      const actualTotal = data.expenseTracking.reduce((s, i) => s + i.actual, 0);
+      const difference = plannedTotal - actualTotal;
+
+      document.getElementById('headerSummary').innerHTML = `
+        <div class="kpi-card info">
+          <div class="kpi-label">شهر يوليو 2026</div>
+          <div class="kpi-value">يوليو</div>
+        </div>
+        <div class="kpi-card warning">
+          <div class="kpi-label">المخطط</div>
+          <div class="kpi-value tabular-nums">${FMSData.formatCurrency(plannedTotal)}</div>
+        </div>
+        <div class="kpi-card danger">
+          <div class="kpi-label">الفعلي</div>
+          <div class="kpi-value tabular-nums">${FMSData.formatCurrency(actualTotal)}</div>
+        </div>
+        <div class="kpi-card ${difference >= 0 ? 'success' : 'danger'}">
+          <div class="kpi-label">الفرق</div>
+          <div class="kpi-value tabular-nums ${difference >= 0 ? 'text-success' : 'text-danger'}">
+            ${difference >= 0 ? '+' : ''}${FMSData.formatCurrency(difference)}
+          </div>
+        </div>
+      `;
+
+      // Render table
+      function renderTable() {
+        const data = FMSData.getData();
+        let html = `<div class="table-container"><table class="data-table"><thead><tr><th>البند</th><th>الحساب</th><th>المخطط</th><th>الفعلي</th><th>الفرق</th><th>الحالة</th>${isAdmin ? '<th>إجراءات</th>' : ''}</tr></thead><tbody>`;
+        
+        data.expenseTracking.forEach(item => {
+          const diff = item.planned - item.actual;
+          const status = item.actual <= item.planned ? 'ضمن الميزانية' : 'تجاوز';
+          const statusClass = item.actual <= item.planned ? 'success' : 'danger';
+          const diffClass = diff >= 0 ? 'text-success' : 'text-danger';
+          const diffSign = diff >= 0 ? '+' : '';
+          
+          html += `
+            <tr>
+              <td>${item.item}</td>
+              <td>${item.account}</td>
+              <td class="tabular-nums">${FMSData.formatCurrency(item.planned)}</td>
+              <td class="tabular-nums">${FMSData.formatCurrency(item.actual)}</td>
+              <td class="tabular-nums ${diffClass}">${diffSign}${FMSData.formatCurrency(diff)}</td>
+              <td><span class="badge badge-${statusClass}">${status}</span></td>
+              ${isAdmin ? `
+                <td>
+                  <button class="btn btn-icon btn-outline" onclick="openExpenseModal(${item.id})">✏️</button>
+                  <button class="btn btn-icon btn-outline" onclick="deleteExpense(${item.id})">🗑️</button>
+                </td>
+              ` : ''}
+            </tr>
+          `;
+        });
+
+        // Totals row
+        const totalPlanned = data.expenseTracking.reduce((s, i) => s + i.planned, 0);
+        const totalActual = data.expenseTracking.reduce((s, i) => s + i.actual, 0);
+        const totalDiff = totalPlanned - totalActual;
+        const totalDiffClass = totalDiff >= 0 ? 'text-success' : 'text-danger';
+        const totalDiffSign = totalDiff >= 0 ? '+' : '';
+
+        html += `
+          <tr style="background:var(--color-surface-alt);font-weight:bold">
+            <td>الإجمالي</td>
+            <td>-</td>
+            <td class="tabular-nums">${FMSData.formatCurrency(totalPlanned)}</td>
+            <td class="tabular-nums">${FMSData.formatCurrency(totalActual)}</td>
+            <td class="tabular-nums ${totalDiffClass}">${totalDiffSign}${FMSData.formatCurrency(totalDiff)}</td>
+            <td>-</td>
+            ${isAdmin ? '<td>-</td>' : ''}
+          </tr>
+        </tbody></table></div>`;
+        
+        document.getElementById('expenseTable').innerHTML = html;
+      }
+
+      renderTable();
+
+      window.openExpenseModal = (id = null) => {
+        document.getElementById('modalTitle').textContent = id ? 'تعديل مصروف' : 'إضافة مصروف';
+        document.getElementById('editId').value = id || '';
+        
+        if (id) {
+          const item = data.expenseTracking.find(i => i.id === id);
+          if (item) {
+            document.getElementById('itemName').value = item.item;
+            document.getElementById('itemAccount').value = item.account;
+            document.getElementById('itemPlanned').value = item.planned;
+            document.getElementById('itemActual').value = item.actual;
+          }
+        } else {
+          document.getElementById('expenseForm').reset();
+        }
+        
+        FMS.UI.openModal('expenseModal');
+      };
+
+      window.saveExpense = () => {
+        const id = document.getElementById('editId').value;
+        const newItem = {
+          item: document.getElementById('itemName').value,
+          account: document.getElementById('itemAccount').value,
+          planned: parseInt(document.getElementById('itemPlanned').value),
+          actual: parseInt(document.getElementById('itemActual').value)
+        };
+
+        if (id) {
+          FMSData.updateItem('expenseTracking', parseInt(id), newItem);
+          FMS.UI.showToast('تم التعديل بنجاح', 'success');
+        } else {
+          FMSData.addItem('expenseTracking', newItem);
+          FMS.UI.showToast('تمت الإضافة بنجاح', 'success');
+        }
+
+        FMS.UI.closeModal('expenseModal');
+        renderTable();
+      };
+
+      window.deleteExpense = (id) => {
+        if (confirm('هل أنت متأكد من الحذف؟')) {
+          FMSData.deleteItem('expenseTracking', id);
+          FMS.UI.showToast('تم الحذف بنجاح', 'success');
+          renderTable();
+        }
+      };
+    }
+  </script>
+</body>
+</html>

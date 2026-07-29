@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>القروض والالتزامات - النظام المالي</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content">
+      <div id="viewerBanner" class="viewer-banner hidden">أنت في وضع المشاهدة فقط</div>
+      <header class="topbar">
+        <div class="flex items-center gap-md">
+          <button class="hamburger">☰</button>
+          <nav class="breadcrumb" id="breadcrumb"></nav>
+        </div>
+        <div class="user-menu">
+          <div class="user-avatar" id="userAvatar"></div>
+          <button class="btn btn-outline btn-sm" onclick="FMS.Auth.logout()">خروج</button>
+        </div>
+      </header>
+      <div class="page-content">
+        <div class="page-header">
+          <h1 class="page-title">القروض والالتزامات</h1>
+          <p class="page-subtitle">متابعة أقساط القروض والمدفوعات المتبقية</p>
+        </div>
+
+        <!-- Loan Summary Cards -->
+        <div class="kpi-grid" id="loanCards"></div>
+
+        <!-- Key Figures -->
+        <div class="summary-bar mt-lg" id="keyFigures"></div>
+
+        <!-- Installment Tables -->
+        <div id="installmentTables"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!FMS.Auth.requireAuth()) { document.body.innerHTML = ''; }
+    else {
+      const user = FMS.Auth.getCurrentUser();
+      if (user.role !== 'admin') document.getElementById('viewerBanner').classList.remove('hidden');
+      
+      document.getElementById('sidebar').innerHTML = FMS.UI.renderSidebar('loans');
+      FMS.UI.setBreadcrumb(['الرئيسية', 'القروض والالتزامات']);
+      document.getElementById('userAvatar').textContent = user.name.charAt(0);
+
+      const data = FMSData.getData();
+      
+      // Calculate totals across all loans
+      let totalFinancing = 0;
+      let totalPaid = 0;
+      let remaining2026 = 0;
+      let totalRemaining = 0;
+
+      data.loans.forEach(loan => {
+        totalFinancing += loan.totalFinancing;
+        const paidInstallments = loan.installments.filter(i => i.status === 'paid');
+        const paidAmount = paidInstallments.reduce((s, i) => s + i.amount, 0);
+        totalPaid += paidAmount;
+        
+        const pendingIn2026 = loan.installments.filter(i => 
+          i.status === 'pending' && i.dueDate.startsWith('2026')
+        );
+        remaining2026 += pendingIn2026.reduce((s, i) => s + i.amount, 0);
+        
+        const allPending = loan.installments.filter(i => i.status === 'pending');
+        totalRemaining += allPending.reduce((s, i) => s + i.amount, 0);
+      });
+
+      // Loan Cards
+      document.getElementById('loanCards').innerHTML = data.loans.map(loan => {
+        const paidAmount = loan.installments.filter(i => i.status === 'paid').reduce((s, i) => s + i.amount, 0);
+        const progress = (paidAmount / loan.totalFinancing) * 100;
+        const remaining = loan.totalFinancing - paidAmount;
+        
+        return `
+          <div class="card">
+            <div class="card-body">
+              <h3 class="card-title mb-md">${loan.name}</h3>
+              <div class="text-sm text-muted mb-sm">إجمالي التمويل: ${FMSData.formatCurrency(loan.totalFinancing)}</div>
+              <div class="progress-track mb-sm">
+                <div class="progress-fill info" style="width: ${progress}%"></div>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-success">مدفوع: ${FMSData.formatCurrency(paidAmount)}</span>
+                <span class="text-danger">متبقي: ${FMSData.formatCurrency(remaining)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Key Figures
+      document.getElementById('keyFigures').innerHTML = `
+        <div class="summary-item">
+          <div class="summary-label">إجمالي التمويل</div>
+          <div class="summary-value tabular-nums">${FMSData.formatCurrency(totalFinancing)}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">إجمالي المدفوع</div>
+          <div class="summary-value tabular-nums text-success">${FMSData.formatCurrency(totalPaid)}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">متبقي 2026</div>
+          <div class="summary-value tabular-nums text-warning">${FMSData.formatCurrency(remaining2026)}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">إجمالي المتبقي</div>
+          <div class="summary-value tabular-nums text-danger">${FMSData.formatCurrency(totalRemaining)}</div>
+        </div>
+      `;
+
+      // Installment Tables per loan
+      document.getElementById('installmentTables').innerHTML = data.loans.map(loan => {
+        const today = new Date().toISOString().split('T')[0];
+        const upcoming = loan.installments.find(i => i.status === 'pending' && i.dueDate >= today);
+        
+        let tableHTML = `
+          <div class="card mt-lg">
+            <div class="card-header">
+              <h2 class="card-title">${loan.name}</h2>
+              ${upcoming ? `<span class="badge badge-warning">القسط القادم: ${upcoming.dueDate} - ${FMSData.formatCurrency(upcoming.amount)}</span>` : ''}
+            </div>
+            <div class="card-body">
+              <div class="table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>تاريخ الاستحقاق</th>
+                      <th>المبلغ</th>
+                      <th>الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+        `;
+
+        loan.installments.forEach(inst => {
+          const statusBadge = inst.status === 'paid' 
+            ? '<span class="badge badge-success">تم السداد</span>' 
+            : '<span class="badge badge-danger">معلق</span>';
+          
+          tableHTML += `
+            <tr>
+              <td>${inst.number}</td>
+              <td class="tabular-nums">${inst.dueDate}</td>
+              <td class="tabular-nums font-bold">${FMSData.formatCurrency(inst.amount)}</td>
+              <td>${statusBadge}</td>
+            </tr>
+          `;
+        });
+
+        tableHTML += `</tbody></table></div></div></div>`;
+        return tableHTML;
+      }).join('');
+    }
+  </script>
+</body>
+</html>

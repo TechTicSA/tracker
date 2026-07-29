@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة التحكم - النظام المالي</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar"></aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Viewer Banner -->
+      <div id="viewerBanner" class="viewer-banner hidden">
+        أنت في وضع المشاهدة فقط — لا يمكنك تعديل البيانات
+      </div>
+
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="flex items-center gap-md">
+          <button class="hamburger">☰</button>
+          <nav class="breadcrumb" id="breadcrumb"></nav>
+        </div>
+        <div class="user-menu">
+          <div class="user-avatar" id="userAvatar"></div>
+          <button class="btn btn-outline btn-sm" onclick="FMS.Auth.logout()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+            </svg>
+            خروج
+          </button>
+        </div>
+      </header>
+
+      <!-- Page Content -->
+      <div class="page-content">
+        <div class="page-header">
+          <h1 class="page-title">لوحة التحكم</h1>
+          <p class="page-subtitle">نظرة عامة على الوضع المالي</p>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid" id="kpiGrid"></div>
+
+        <!-- Charts Section -->
+        <div class="flex flex-col gap-lg">
+          <!-- Revenue Breakdown Donut Chart -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">توزيع الإيرادات حسب المصدر</h2>
+            </div>
+            <div class="card-body">
+              <div id="revenueDonutChart"></div>
+            </div>
+          </div>
+
+          <!-- Achievement Ring & Comparison -->
+          <div class="flex flex-col gap-lg" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));">
+            <!-- Achievement Ring -->
+            <div class="card">
+              <div class="card-header">
+                <h2 class="card-title">نسبة الإنجاز السنوي</h2>
+              </div>
+              <div class="card-body flex justify-center">
+                <div id="achievementRing"></div>
+              </div>
+              <div class="card-footer flex justify-between" style="padding: var(--spacing-md);">
+                <div class="text-center">
+                  <div class="text-sm text-muted">منجز</div>
+                  <div class="text-xl font-bold text-success" id="achievedAmount"></div>
+                </div>
+                <div class="text-center">
+                  <div class="text-sm text-muted">متبقي</div>
+                  <div class="text-xl font-bold text-danger" id="remainingAmount"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Month Comparison Table -->
+            <div class="card">
+              <div class="card-header">
+                <h2 class="card-title">مقارنة المصروفات: يوليو × يونيو</h2>
+              </div>
+              <div class="card-body" id="comparisonTable"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // Auth check
+    if (!FMS.Auth.requireAuth()) {
+      document.body.innerHTML = '<div class="login-page"><div class="skeleton-card"></div></div>';
+    } else {
+      const user = FMS.Auth.getCurrentUser();
+      const isAdmin = user.role === 'admin';
+
+      // Show viewer banner if not admin
+      if (!isAdmin) {
+        document.getElementById('viewerBanner').classList.remove('hidden');
+      }
+
+      // Render sidebar
+      document.getElementById('sidebar').innerHTML = FMS.UI.renderSidebar('dashboard');
+
+      // Set breadcrumb
+      FMS.UI.setBreadcrumb(['الرئيسية', 'لوحة التحكم']);
+
+      // Set user avatar
+      document.getElementById('userAvatar').textContent = user.name.charAt(0);
+
+      // Load and render dashboard data
+      const data = FMSData.getData();
+      
+      // Calculate KPIs
+      const totalRevenue = data.budgetRevenue.reduce((sum, item) => sum + item.actual, 0);
+      const totalExpected = data.budgetRevenue.reduce((sum, item) => sum + item.expected, 0);
+      const totalExpenses = [
+        ...data.budgetOperating,
+        ...data.budgetOther
+      ].reduce((sum, item) => sum + item.actual, 0);
+      const netPosition = totalRevenue - totalExpenses;
+      const achievementRate = (totalRevenue / totalExpected) * 100;
+
+      // Render KPI Cards
+      document.getElementById('kpiGrid').innerHTML = `
+        <div class="kpi-card success">
+          <div class="kpi-label">إجمالي الإيرادات</div>
+          <div class="kpi-value tabular-nums">${FMSData.formatCurrency(totalRevenue)}</div>
+          <div class="kpi-delta positive">
+            <span>▲</span>
+            <span>${FMSData.formatPercentage(achievementRate)} من المتوقع</span>
+          </div>
+        </div>
+        <div class="kpi-card danger">
+          <div class="kpi-label">إجمالي المصروفات</div>
+          <div class="kpi-value tabular-nums">${FMSData.formatCurrency(totalExpenses)}</div>
+          <div class="kpi-delta negative">
+            <span>▼</span>
+            <span>${FMSData.formatPercentage((totalExpenses / totalRevenue) * 100)} من الإيرادات</span>
+          </div>
+        </div>
+        <div class="kpi-card info">
+          <div class="kpi-label">صافي المركز</div>
+          <div class="kpi-value tabular-nums ${netPosition >= 0 ? 'text-success' : 'text-danger'}">
+            ${FMSData.formatCurrency(Math.abs(netPosition))}
+          </div>
+          <div class="kpi-delta ${netPosition >= 0 ? 'positive' : 'negative'}">
+            <span>${netPosition >= 0 ? '▲' : '▼'}</span>
+            <span>${netPosition >= 0 ? 'إيجابي' : 'سلبي'}</span>
+          </div>
+        </div>
+        <div class="kpi-card warning">
+          <div class="kpi-label">نسبة الإنجاز</div>
+          <div class="kpi-value">${FMSData.formatPercentage(achievementRate)}</div>
+          <div class="kpi-delta ${achievementRate >= 80 ? 'positive' : 'negative'}">
+            <span>${achievementRate >= 80 ? '✓' : '!'}</span>
+            <span>${achievementRate >= 80 ? 'ممتاز' : 'يحتاج تحسين'}</span>
+          </div>
+        </div>
+      `;
+
+      // Render Revenue Donut Chart
+      const revenueData = data.budgetRevenue.map(item => ({
+        label: item.item,
+        value: item.actual
+      })).filter(item => item.value > 0);
+
+      document.getElementById('revenueDonutChart').innerHTML = FMS.Charts.renderDonut(
+        revenueData,
+        totalRevenue,
+        80,
+        20
+      );
+
+      // Render Achievement Ring
+      document.getElementById('achievementRing').innerHTML = FMS.Charts.renderRing(achievementRate, 150, 15, 'info');
+      document.getElementById('achievedAmount').textContent = FMSData.formatCurrency(totalRevenue) + ' ر.س';
+      document.getElementById('remainingAmount').textContent = FMSData.formatCurrency(totalExpected - totalRevenue) + ' ر.س';
+
+      // Render Comparison Table (July vs June expenses)
+      const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul'];
+      const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو'];
+      
+      const juneExpenses = data.monthlyExpenses.map(item => item.jun);
+      const julyExpenses = data.monthlyExpenses.map(item => item.jul);
+      const differences = julyExpenses.map((jul, i) => jul - juneExpenses[i]);
+
+      let comparisonHTML = `
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>البند</th>
+                <th>يونيو</th>
+                <th>يوليو</th>
+                <th>الفرق</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      data.monthlyExpenses.forEach((item, index) => {
+        const diff = differences[index];
+        const diffClass = diff > 0 ? 'text-danger' : diff < 0 ? 'text-success' : '';
+        const diffSign = diff > 0 ? '+' : '';
+        
+        comparisonHTML += `
+          <tr>
+            <td>${item.item}</td>
+            <td class="tabular-nums">${FMSData.formatCurrency(item.jun)}</td>
+            <td class="tabular-nums">${FMSData.formatCurrency(item.jul)}</td>
+            <td class="tabular-nums ${diffClass}">${diffSign}${FMSData.formatCurrency(diff)}</td>
+          </tr>
+        `;
+      });
+
+      // Totals row
+      const junTotal = juneExpenses.reduce((a, b) => a + b, 0);
+      const julTotal = julyExpenses.reduce((a, b) => a + b, 0);
+      const totalDiff = julTotal - junTotal;
+      const totalDiffClass = totalDiff > 0 ? 'text-danger' : totalDiff < 0 ? 'text-success' : '';
+      const totalDiffSign = totalDiff > 0 ? '+' : '';
+
+      comparisonHTML += `
+          <tr style="background: var(--color-surface-alt); font-weight: bold;">
+            <td>الإجمالي</td>
+            <td class="tabular-nums">${FMSData.formatCurrency(junTotal)}</td>
+            <td class="tabular-nums">${FMSData.formatCurrency(julTotal)}</td>
+            <td class="tabular-nums ${totalDiffClass}">${totalDiffSign}${FMSData.formatCurrency(totalDiff)}</td>
+          </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      document.getElementById('comparisonTable').innerHTML = comparisonHTML;
+    }
+  </script>
+</body>
+</html>

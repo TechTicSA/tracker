@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>الميزانية السنوية - النظام المالي</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar" id="sidebar"></aside>
+
+    <main class="main-content">
+      <div id="viewerBanner" class="viewer-banner hidden">
+        أنت في وضع المشاهدة فقط — لا يمكنك تعديل البيانات
+      </div>
+
+      <header class="topbar">
+        <div class="flex items-center gap-md">
+          <button class="hamburger">☰</button>
+          <nav class="breadcrumb" id="breadcrumb"></nav>
+        </div>
+        <div class="user-menu">
+          <div class="user-avatar" id="userAvatar"></div>
+          <button class="btn btn-outline btn-sm" onclick="FMS.Auth.logout()">خروج</button>
+        </div>
+      </header>
+
+      <div class="page-content">
+        <div class="page-header flex justify-between items-center">
+          <div>
+            <h1 class="page-title">الميزانية السنوية</h1>
+            <p class="page-subtitle">متابعة الإيرادات والمصروفات المتوقعة والفعلية</p>
+          </div>
+          <div id="adminActions"></div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="revenue">الإيرادات</button>
+          <button class="tab-btn" data-tab="operating">المصروفات التشغيلية</button>
+          <button class="tab-btn" data-tab="other">المصروفات الأخرى</button>
+        </div>
+
+        <!-- Revenue Tab -->
+        <div class="tab-content active" id="revenueTab">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>البند</th>
+                  <th>المتوقع</th>
+                  <th>الفعلي</th>
+                  <th>نسبة الإنجاز</th>
+                  <th>المتأخر</th>
+                  <th>غير المحصل</th>
+                  <th>إجمالي المستحق</th>
+                  <th>ملاحظات</th>
+                  <th class="admin-only">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="revenueTableBody"></tbody>
+            </table>
+          </div>
+          <div class="summary-bar" id="revenueSummary"></div>
+        </div>
+
+        <!-- Operating Tab -->
+        <div class="tab-content" id="operatingTab">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>البند</th>
+                  <th>المتوقع</th>
+                  <th>الفعلي</th>
+                  <th>نسبة الإنجاز</th>
+                  <th class="admin-only">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="operatingTableBody"></tbody>
+            </table>
+          </div>
+          <div class="summary-bar" id="operatingSummary"></div>
+        </div>
+
+        <!-- Other Tab -->
+        <div class="tab-content" id="otherTab">
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>البند</th>
+                  <th>المتوقع</th>
+                  <th>الفعلي</th>
+                  <th>نسبة الإنجاز</th>
+                  <th>المتأخر</th>
+                  <th>غير المحصل</th>
+                  <th>إجمالي المستحق</th>
+                  <th>ملاحظات</th>
+                  <th class="admin-only">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="otherTableBody"></tbody>
+            </table>
+          </div>
+          <div class="summary-bar" id="otherSummary"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">تعديل البند</h3>
+        <button class="modal-close">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="editForm">
+          <input type="hidden" id="editId" name="id">
+          <input type="hidden" id="editType" name="type">
+          <div class="form-group">
+            <label class="form-label">اسم البند</label>
+            <input type="text" class="form-input" id="editItem" name="item" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">المتوقع</label>
+            <input type="number" class="form-input" id="editExpected" name="expected" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">الفعلي</label>
+            <input type="number" class="form-input" id="editActual" name="actual" required>
+          </div>
+          <div class="form-group revenue-field">
+            <label class="form-label">ملاحظات</label>
+            <input type="text" class="form-input" id="editNotes" name="notes">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="FMS.UI.closeModal('editModal')">إلغاء</button>
+        <button class="btn btn-primary" onclick="saveEdit()">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!FMS.Auth.requireAuth()) {
+      document.body.innerHTML = '<div class="login-page"><div class="skeleton-card"></div></div>';
+    } else {
+      const user = FMS.Auth.getCurrentUser();
+      const isAdmin = user.role === 'admin';
+
+      if (!isAdmin) {
+        document.getElementById('viewerBanner').classList.remove('hidden');
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      } else {
+        document.getElementById('adminActions').innerHTML = `
+          <button class="btn btn-primary" onclick="openAddModal()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+            </svg>
+            إضافة بند
+          </button>
+        `;
+      }
+
+      document.getElementById('sidebar').innerHTML = FMS.UI.renderSidebar('annual-budget');
+      FMS.UI.setBreadcrumb(['الرئيسية', 'الميزانية السنوية']);
+      document.getElementById('userAvatar').textContent = user.name.charAt(0);
+
+      const data = FMSData.getData();
+
+      // Render tables
+      function renderRevenueTable() {
+        const tbody = document.getElementById('revenueTableBody');
+        tbody.innerHTML = data.budgetRevenue.map(item => {
+          const achievement = FMSData.calculateAchievement(item.actual, item.expected);
+          const badgeClass = FMSData.getAchievementBadgeClass(achievement);
+          const totalPending = (item.delayed || 0) + (item.uncollected || 0);
+          
+          return `
+            <tr>
+              <td>${item.item}</td>
+              <td class="tabular-nums">${FMSData.formatCurrency(item.expected)}</td>
+              <td class="tabular-nums">${FMSData.formatCurrency(item.actual)}</td>
+              <td><span class="badge ${badgeClass}">${FMSData.formatPercentage(achievement)}</span></td>
+              <td class="tabular-nums text-danger">${FMSData.formatCurrency(item.delayed || 0)}</td>
+              <td class="tabular-nums text-warning">${FMSData.formatCurrency(item.uncollected || 0)}</td>
+              <td class="tabular-nums font-bold">${FMSData.formatCurrency(totalPending)}</td>
+              <td>${item.notes || '-'}</td>
+              ${isAdmin ? `
+                <td>
+                  <button class="btn btn-icon btn-outline" onclick="openEditModal('revenue', ${item.id})">✏️</button>
+                  <button class="btn btn-icon btn-outline" onclick="deleteItem('budgetRevenue', ${item.id})">🗑️</button>
+                </td>
+              ` : ''}
+            </tr>
+          `;
+        }).join('');
+
+        // Summary
+        const totalExpected = data.budgetRevenue.reduce((s, i) => s + i.expected, 0);
+        const totalActual = data.budgetRevenue.reduce((s, i) => s + i.actual, 0);
+        const remaining = totalExpected - totalActual;
+        
+        document.getElementById('revenueSummary').innerHTML = `
+          <div class="summary-item">
+            <div class="summary-label">المتوقع</div>
+            <div class="summary-value tabular-nums">${FMSData.formatCurrency(totalExpected)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">الفعلي</div>
+            <div class="summary-value tabular-nums">${FMSData.formatCurrency(totalActual)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">المتبقي</div>
+            <div class="summary-value tabular-nums">${FMSData.formatCurrency(remaining)}</div>
+          </div>
+        `;
+      }
+
+      function renderOperatingTable() {
+        const tbody = document.getElementById('operatingTableBody');
+        tbody.innerHTML = data.budgetOperating.map(item => {
+          const achievement = FMSData.calculateAchievement(item.actual, item.expected);
+          const badgeClass = FMSData.getAchievementBadgeClass(achievement);
+          
+          return `
+            <tr>
+              <td>${item.item}</td>
+              <td class="tabular-nums">${FMSData.formatCurrency(item.expected)}</td>
+              <td class="tabular-nums">${FMSData.formatCurrency(item.actual)}</td>
+              <td><span class="badge ${badgeClass}">${FMSData.formatPercentage(achievement)}</span></td>
+              ${isAdmin ? `
+                <td>
+                  <button class="btn btn-icon btn-outline" onclick="openEditModal('operating', ${item.id})">✏️</button>
+                  <button class="btn btn-icon btn-outline" onclick="deleteItem('budgetOperating', ${item.id})">🗑️</button>
+                </td>
+              ` : ''}
+            </tr>
+          `;
+        }).join('');
+
+        const totalExpected = data.budgetOperating.reduce((s, i) => s + i.expected, 0);
+        const totalActual = data.budgetOperating.reduce((s, i) => s + i.actual, 0);
+        
+        document.getElementById('operatingSummary').innerHTML = `
+          <div class="summary-item">
+            <div class="summary-label">المتوقع</div>
+            <div class="summary-value tabular-nums">${FMSData.formatCurrency(totalExpected)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">الفعلي</div>
+            <div class="summary-value tabular-nums">${FMSData.formatCurrency(totalActual)}</div>
+          </div>
+        `;
+      }
+
+      function renderOtherTable() {
+        const tbody = document.getElementById('otherTableBody');
+        tbody.innerHTML = data.budgetOther.map(item => {
+          const achievement = FMSData.calculateAchievement(item.actual, item.expected);
+          const badgeClass = FMSData.getAchievementBadgeClass(achievement);
+          
+          return `
+            <tr>
+              <td>${item.item}</td>
+              <td class="tabular-nums">${FMSData.formatCurrency(item.expected)}</td>
+              <td class="tabular-nums">${FMSData.formatCurrency(item.actual)}</td>
+              <td><span class="badge ${badgeClass}">${FMSData.formatPercentage(achievement)}</span></td>
+              <td class="tabular-nums">-</td>
+              <td class="tabular-nums">-</td>
+              <td class="tabular-nums">-</td>
+              <td>-</td>
+              ${isAdmin ? `
+                <td>
+                  <button class="btn btn-icon btn-outline" onclick="openEditModal('other', ${item.id})">✏️</button>
+                  <button class="btn btn-icon btn-outline" onclick="deleteItem('budgetOther', ${item.id})">🗑️</button>
+                </td>
+              ` : ''}
+            </tr>
+          `;
+        }).join('');
+
+        const totalExpected = data.budgetOther.reduce((s, i) => s + i.expected, 0);
+        const totalActual = data.budgetOther.reduce((s, i) => s + i.actual, 0);
+        
+        document.getElementById('otherSummary').innerHTML = `
+          <div class="summary-item">
+            <div class="summary-label">المتوقع</div>
+            <div class="summary-value tabular-nums">${FMSData.formatCurrency(totalExpected)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">الفعلي</div>
+            <div class="summary-value tabular-nums">${FMSData.formatCurrency(totalActual)}</div>
+          </div>
+        `;
+      }
+
+      renderRevenueTable();
+      renderOperatingTable();
+      renderOtherTable();
+
+      // Tab switching
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById(`${btn.dataset.tab}Tab`).classList.add('active');
+        });
+      });
+
+      // Edit functions
+      window.openEditModal = (type, id) => {
+        const table = type === 'revenue' ? data.budgetRevenue : type === 'operating' ? data.budgetOperating : data.budgetOther;
+        const item = table.find(i => i.id === id);
+        if (!item) return;
+
+        document.getElementById('editId').value = item.id;
+        document.getElementById('editType').value = type;
+        document.getElementById('editItem').value = item.item;
+        document.getElementById('editExpected').value = item.expected;
+        document.getElementById('editActual').value = item.actual;
+        if (item.notes !== undefined) {
+          document.getElementById('editNotes').value = item.notes;
+        }
+
+        FMS.UI.openModal('editModal');
+      };
+
+      window.saveEdit = () => {
+        const id = parseInt(document.getElementById('editId').value);
+        const type = document.getElementById('editType').value;
+        const tableName = type === 'revenue' ? 'budgetRevenue' : type === 'operating' ? 'budgetOperating' : 'budgetOther';
+        
+        const updates = {
+          item: document.getElementById('editItem').value,
+          expected: parseInt(document.getElementById('editExpected').value),
+          actual: parseInt(document.getElementById('editActual').value)
+        };
+
+        if (document.getElementById('editNotes')) {
+          updates.notes = document.getElementById('editNotes').value;
+        }
+
+        FMSData.updateItem(tableName, id, updates);
+        FMS.UI.showToast('تم الحفظ بنجاح', 'success');
+        FMS.UI.closeModal('editModal');
+        
+        // Re-render
+        renderRevenueTable();
+        renderOperatingTable();
+        renderOtherTable();
+      };
+
+      window.deleteItem = (tableName, id) => {
+        if (confirm('هل أنت متأكد من حذف هذا البند؟')) {
+          FMSData.deleteItem(tableName, id);
+          FMS.UI.showToast('تم الحذف بنجاح', 'success');
+          renderRevenueTable();
+          renderOperatingTable();
+          renderOtherTable();
+        }
+      };
+
+      window.openAddModal = () => {
+        document.getElementById('editForm').reset();
+        document.getElementById('editId').value = '';
+        document.getElementById('editType').value = 'revenue';
+        FMS.UI.openModal('editModal');
+      };
+    }
+  </script>
+</body>
+</html>

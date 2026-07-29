@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>أرصدة الحسابات - النظام المالي</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main-content">
+      <div id="viewerBanner" class="viewer-banner hidden">أنت في وضع المشاهدة فقط</div>
+      <header class="topbar">
+        <div class="flex items-center gap-md">
+          <button class="hamburger">☰</button>
+          <nav class="breadcrumb" id="breadcrumb"></nav>
+        </div>
+        <div class="user-menu">
+          <div class="user-avatar" id="userAvatar"></div>
+          <button class="btn btn-outline btn-sm" onclick="FMS.Auth.logout()">خروج</button>
+        </div>
+      </header>
+      <div class="page-content">
+        <div class="page-header">
+          <h1 class="page-title">أرصدة الحسابات</h1>
+          <p class="page-subtitle">مقارنة الأرصدة المتوقعة والفعلية وأرصدة العيادة</p>
+        </div>
+
+        <!-- View Tabs -->
+        <div class="tabs">
+          <button class="tab-btn active" data-view="expected">المتوقع</button>
+          <button class="tab-btn" data-view="actual">الفعلي</button>
+          <button class="tab-btn" data-view="clinic">العيادة</button>
+        </div>
+
+        <!-- Content -->
+        <div id="balancesContent"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!FMS.Auth.requireAuth()) { document.body.innerHTML = ''; }
+    else {
+      const user = FMS.Auth.getCurrentUser();
+      if (user.role !== 'admin') document.getElementById('viewerBanner').classList.remove('hidden');
+      
+      document.getElementById('sidebar').innerHTML = FMS.UI.renderSidebar('account-balances');
+      FMS.UI.setBreadcrumb(['الرئيسية', 'أرصدة الحسابات']);
+      document.getElementById('userAvatar').textContent = user.name.charAt(0);
+
+      const data = FMSData.getData();
+      let currentView = 'expected';
+
+      // Render tabs
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentView = btn.dataset.view;
+          renderBalances();
+        });
+      });
+
+      function renderBalances() {
+        let balances;
+        let title;
+        
+        switch(currentView) {
+          case 'expected': 
+            balances = data.accountBalancesExpected; 
+            title = 'الأرصدة المتوقعة';
+            break;
+          case 'actual': 
+            balances = data.accountBalancesActual; 
+            title = 'الأرصدة الفعلية';
+            break;
+          case 'clinic': 
+            balances = data.accountBalancesClinic; 
+            title = 'أرصدة العيادة';
+            break;
+        }
+
+        const grandOpening = balances.reduce((s, a) => s + a.opening, 0);
+        const grandIncoming = balances.reduce((s, a) => s + a.incoming, 0);
+        const grandExpense = balances.reduce((s, a) => s + a.expense, 0);
+        const grandCurrent = balances.reduce((s, a) => s + a.current, 0);
+
+        let html = `
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">${title}</h2>
+            </div>
+            <div class="card-body">
+              <div class="table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>اسم الحساب</th>
+                      <th>الرصيد الافتتاحي</th>
+                      <th>الوارد</th>
+                      <th>الصادر</th>
+                      <th>الرصيد الحالي</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+        `;
+
+        balances.forEach(acc => {
+          const balanceClass = acc.current >= 0 ? 'text-success' : 'text-danger';
+          html += `
+            <tr>
+              <td>${acc.account}</td>
+              <td class="tabular-nums">${FMSData.formatCurrency(acc.opening)}</td>
+              <td class="tabular-nums text-success">${FMSData.formatCurrency(acc.incoming)}</td>
+              <td class="tabular-nums text-danger">${FMSData.formatCurrency(acc.expense)}</td>
+              <td class="tabular-nums font-bold ${balanceClass}">${FMSData.formatCurrency(acc.current)}</td>
+            </tr>
+          `;
+        });
+
+        html += `
+          <tr style="background:var(--color-surface-alt);font-weight:bold">
+            <td>الإجمالي العام</td>
+            <td class="tabular-nums">${FMSData.formatCurrency(grandOpening)}</td>
+            <td class="tabular-nums text-success">${FMSData.formatCurrency(grandIncoming)}</td>
+            <td class="tabular-nums text-danger">${FMSData.formatCurrency(grandExpense)}</td>
+            <td class="tabular-nums ${grandCurrent >= 0 ? 'text-success' : 'text-danger'}">${FMSData.formatCurrency(grandCurrent)}</td>
+          </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        document.getElementById('balancesContent').innerHTML = html;
+      }
+
+      renderBalances();
+    }
+  </script>
+</body>
+</html>
