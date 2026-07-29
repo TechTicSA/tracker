@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>النظام المالي | Family Office Financial Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Tajawal', 'system-ui', 'sans-serif'],
+            },
+            colors: {
+              primary: {
+                50: '#f0fdf4',
+                100: '#dcfce7',
+                200: '#bbf7d0',
+                300: '#86efac',
+                400: '#4ade80',
+                500: '#22c55e',
+                600: '#16a34a',
+                700: '#15803d',
+                800: '#166534',
+                900: '#14532d',
+              },
+              danger: {
+                50: '#fef2f2',
+                100: '#fee2e2',
+                200: '#fecaca',
+                300: '#fca5a5',
+                400: '#f87171',
+                500: '#ef4444',
+                600: '#dc2626',
+                700: '#b91c1c',
+                800: '#991b1b',
+                900: '#7f1d1d',
+              },
+              warning: {
+                50: '#fffbeb',
+                100: '#fef3c7',
+                200: '#fde68a',
+                300: '#fcd34d',
+                400: '#fbbf24',
+                500: '#f59e0b',
+                600: '#d97706',
+                700: '#b45309',
+                800: '#92400e',
+                900: '#78350f',
+              },
+              info: {
+                50: '#eff6ff',
+                100: '#dbeafe',
+                200: '#bfdbfe',
+                300: '#93c5fd',
+                400: '#60a5fa',
+                500: '#3b82f6',
+                600: '#2563eb',
+                700: '#1d4ed8',
+                800: '#1e40af',
+                900: '#1e3a8a',
+              },
+              slate: {
+                850: '#1e293b',
+                900: '#0f172a',
+                950: '#020617',
+              },
+            },
+            boxShadow: {
+              'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
+              'elevated': '0 10px 40px -10px rgba(0, 0, 0, 0.15)',
+              'glow-primary': '0 0 20px rgba(34, 197, 94, 0.3)',
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.3s ease-out',
+              'slide-up': 'slideUp 0.4s ease-out',
+              'scale-in': 'scaleIn 0.2s ease-out',
+              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              slideUp: {
+                '0%': { opacity: '0', transform: 'translateY(20px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              scaleIn: {
+                '0%': { opacity: '0', transform: 'scale(0.95)' },
+                '100%': { opacity: '1', transform: 'scale(1)' },
+              },
+            },
+          },
+        },
+      }
+    </script>
+    <style type="text/tailwindcss">
+      @layer base {
+        * {
+          @apply border-slate-200;
+        }
+        body {
+          @apply bg-slate-50 text-slate-900 antialiased;
+          font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+        }
+      }
+      
+      @layer utilities {
+        .tabular-nums-custom {
+          font-variant-numeric: tabular-nums;
+          direction: ltr;
+          unicode-bidi: embed;
+        }
+        .glass-effect {
+          @apply backdrop-blur-xl bg-white/80 border border-white/20;
+        }
+        .gradient-primary {
+          @apply bg-gradient-to-br from-primary-500 to-primary-700;
+        }
+        .gradient-danger {
+          @apply bg-gradient-to-br from-danger-500 to-danger-700;
+        }
+        .gradient-info {
+          @apply bg-gradient-to-br from-info-500 to-info-700;
+        }
+        .gradient-warning {
+          @apply bg-gradient-to-br from-warning-400 to-warning-600;
+        }
+        .text-gradient {
+          @apply bg-clip-text text-transparent bg-gradient-to-r;
+        }
+        .card-hover {
+          @apply transition-all duration-300 hover:shadow-elevated hover:-translate-y-1;
+        }
+        .btn-primary {
+          @apply px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+        }
+        .btn-secondary {
+          @apply px-6 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-medium rounded-lg border border-slate-300 transition-all duration-200 shadow-sm hover:shadow-md active:scale-95;
+        }
+        .btn-danger {
+          @apply px-6 py-2.5 bg-danger-600 hover:bg-danger-700 text-white font-medium rounded-lg transition-all duration-200 shadow-sm hover:shadow-md active:scale-95;
+        }
+        .input-field {
+          @apply w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 outline-none placeholder:text-slate-400;
+        }
+        .badge {
+          @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+        }
+        .badge-success {
+          @apply bg-primary-100 text-primary-800;
+        }
+        .badge-danger {
+          @apply bg-danger-100 text-danger-800;
+        }
+        .badge-warning {
+          @apply bg-warning-100 text-warning-800;
+        }
+        .badge-info {
+          @apply bg-info-100 text-info-800;
+        }
+      }
+      
+      /* Custom scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        @apply bg-slate-100 rounded-full;
+      }
+      ::-webkit-scrollbar-thumb {
+        @apply bg-slate-300 rounded-full hover:bg-slate-400 transition-colors;
+      }
+      
+      /* Table styles */
+      .data-table {
+        @apply w-full;
+      }
+      .data-table th {
+        @apply px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider bg-slate-50 border-b border-slate-200;
+      }
+      .data-table td {
+        @apply px-4 py-3 text-sm text-slate-900 border-b border-slate-100;
+      }
+      .data-table tbody tr {
+        @apply hover:bg-slate-50 transition-colors;
+      }
+      .data-table tbody tr:last-child td {
+        @apply border-b-0;
+      }
+      
+      /* Chart animations */
+      .chart-bar {
+        @apply transition-all duration-500 ease-out;
+      }
+      .chart-bar:hover {
+        @apply opacity-80;
+      }
+      
+      /* Modal animations */
+      .modal-enter {
+        @apply opacity-0 scale-95;
+      }
+      .modal-enter-active {
+        @apply opacity-100 scale-100 transition-all duration-200;
+      }
+      .modal-exit {
+        @apply opacity-100 scale-100;
+      }
+      .modal-exit-active {
+        @apply opacity-0 scale-95 transition-all duration-150;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen">
+    <div id="app"></div>
+    
+    <!-- Core Application Scripts -->
+    <script src="src/utils/helpers.js"></script>
+    <script src="src/stores/auth.js"></script>
+    <script src="src/stores/data.js"></script>
+    <script src="src/components/layout.js"></script>
+    <script src="src/components/charts.js"></script>
+    <script src="src/components/modals.js"></script>
+    <script src="src/pages/login.js"></script>
+    <script src="src/pages/dashboard.js"></script>
+    <script src="src/pages/annual-budget.js"></script>
+    <script src="src/pages/monthly-report.js"></script>
+    <script src="src/pages/expense-tracking.js"></script>
+    <script src="src/pages/bank-statements.js"></script>
+    <script src="src/pages/account-balances.js"></script>
+    <script src="src/pages/clinic-investment.js"></script>
+    <script src="src/pages/loans.js"></script>
+    <script src="src/pages/reports.js"></script>
+    <script src="src/pages/users.js"></script>
+    <script src="src/app.js"></script>
+  </body>
+</html>
